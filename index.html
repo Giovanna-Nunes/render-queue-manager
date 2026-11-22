@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Midnight Grafite — Render Farm & QuickSort TCP</title>
+<style>
+  :root {
+    --bg: #121316;
+    --surface: #1b1d22; 
+    --surface-alt: #24272e;
+    --border: #323640;
+    --text: #f3f4f6;
+    --muted: #9ca3af;
+    --accent: #38bdf8;
+    --accent-hover: #0284c7;
+    --pivo: #f59e0b;
+    --pivo-bg: rgba(245, 158, 11, 0.16);
+    --success: #10b981;
+    --danger: #ef4444;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+  body { background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
+
+  /* Menu Lateral Grafite */
+  aside {
+    width: 270px; background: var(--surface); border-right: 1px solid var(--border);
+    padding: 28px 18px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .brand { padding: 0 10px 16px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+  .brand h2 { font-size: 1.25rem; letter-spacing: 1px; color: #fff; font-weight: 800; }
+  .brand span { font-size: 0.78rem; color: var(--pivo); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600; }
+
+  .conn-status {
+    display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--muted);
+    background: var(--bg); padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 8px;
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--danger); }
+  .dot.on { background: var(--success); box-shadow: 0 0 8px var(--success); }
+
+  .nav-btn {
+    background: transparent; border: 1px solid transparent; color: var(--muted);
+    padding: 13px 14px; text-align: left; border-radius: 8px; cursor: pointer;
+    font-size: 0.92rem; font-weight: 500; transition: 0.2s;
+  }
+  .nav-btn:hover { background: var(--surface-alt); color: var(--text); }
+  .nav-btn.active { background: var(--surface-alt); color: #fff; border-color: var(--pivo); font-weight: 600; }
+
+  /* Conteúdo Principal */
+  main { flex: 1; padding: 32px; overflow-y: auto; max-width: 1300px; }
+  header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; gap: 16px; flex-wrap: wrap; }
+  h1 { font-size: 1.65rem; font-weight: 700; }
+  .subtitle { color: var(--muted); font-size: 0.92rem; margin-top: 4px; }
+
+  /* Caixa Didática para Apresentação */
+  .doc-box {
+    background: var(--surface); border-left: 4px solid var(--accent); border-top: 1px solid var(--border);
+    border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    border-radius: 8px; padding: 16px 20px; margin-bottom: 24px; font-size: 0.9rem; line-height: 1.55; color: #d1d5db;
+  }
+  .doc-box strong { color: #fff; }
+  .highlight-pivo { color: var(--pivo); font-weight: 700; }
+
+  /* Grid Principal da Aba 1 */
+  .split-grid { display: grid; grid-template-columns: 1fr 1.35fr; gap: 24px; align-items: start; }
+  @media (max-width: 1024px) { .split-grid { grid-template-columns: 1fr; } }
+
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+  .panel-title { font-size: 1.05rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+
+  /* Formulários */
+  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+  label { font-size: 0.82rem; color: var(--muted); font-weight: 600; }
+  input, select {
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 10px 12px; border-radius: 8px; font-size: 0.95rem; width: 100%;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+
+  .btn {
+    background: var(--accent); color: #090d16; border: none; padding: 11px 18px;
+    border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 0.92rem; transition: 0.2s; width: 100%;
+  }
+  .btn:hover { background: var(--accent-hover); color: #fff; }
+  .btn-pivo { background: var(--pivo); color: #121316; width: auto; }
+  .btn-pivo:hover { background: #d97706; color: #fff; }
+  .btn-amber { background: var(--pivo); color: #121316; }
+  .btn-amber:hover { background: #d97706; color: #fff; }
+
+  /* Métricas */
+  .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+  .stat { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; text-align: center; }
+  .stat-num { font-size: 1.5rem; font-weight: 800; margin-top: 4px; }
+  .stat-lbl { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; }
+
+  /* Tabelas */
+  table { width: 100%; border-collapse: collapse; text-align: left; }
+  th, td { padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+  th { color: var(--muted); font-size: 0.78rem; text-transform: uppercase; background: rgba(0,0,0,0.2); }
+  tr:last-child td { border-bottom: none; }
+
+  tr.row-pivo { background: var(--pivo-bg); outline: 1px solid var(--pivo); }
+  .tag-pivo {
+    background: var(--pivo); color: #121316; font-size: 0.72rem; font-weight: 800;
+    padding: 2px 7px; border-radius: 4px; margin-left: 6px; display: inline-block;
+  }
+
+  .badge { padding: 3px 9px; border-radius: 12px; font-size: 0.76rem; font-weight: 700; }
+  .badge.pendente { background: rgba(245, 158, 11, 0.15); color: var(--pivo); }
+  .badge.pronto { background: rgba(16, 185, 129, 0.15); color: var(--success); }
+  .badge.erro { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+
+  .mini-btn {
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 4px 8px; border-radius: 5px; cursor: pointer; font-size: 0.78rem;
+  }
+  .mini-btn:hover { border-color: var(--pivo); color: var(--pivo); }
+
+  /* Terminal de Logs */
+  .console {
+    background: #0a0b0d; border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px; font-family: 'Consolas', monospace; font-size: 0.82rem; color: #38bdf8;
+    max-height: 170px; overflow-y: auto; margin-top: 16px;
+  }
+  .console p { margin-bottom: 5px; }
+
+  /* Visualização de Blocos QuickSort (Aba 3) */
+  .array-visual { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0 18px 0; }
+  .num-box {
+    background: var(--bg); border: 2px solid var(--border); border-radius: 8px;
+    padding: 12px 18px; font-size: 1.2rem; font-weight: 700; min-width: 56px; text-align: center;
+  }
+  .num-box.pivo-box { border-color: var(--pivo); background: var(--pivo-bg); color: var(--pivo); }
+  .num-box.sorted-box { border-color: var(--success); color: var(--success); }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<aside>
+  <div class="brand">
+    <h2>MIDNIGHT GRAFITE</h2>
+    <span>Render Farm & ED2</span>
+  </div>
+  <div class="conn-status">
+    <span class="dot" id="dot"></span>
+    <span id="status-txt">Conectando ao Python...</span>
+  </div>
+  <button class="nav-btn active" onclick="trocarAba('estudio', this)">1. Estúdio & Fila QuickSort</button>
+  <button class="nav-btn" onclick="trocarAba('cliente', this)">2. Portal do Cliente</button>
+  <button class="nav-btn" onclick="trocarAba('sockets', this)">3. Lab TCP: Números Puros</button>
+</aside>
+
+<main>
+  <!-- ABA 1: ESTÚDIO & SERVIDOR -->
+  <section id="aba-estudio" class="aba">
+    <header>
+      <div>
+        <h1>Orquestrador de Renderização — Midnight Grafite</h1>
+        <p class="subtitle">Aplicação prática de Cliente/Servidor TCP com ordenação por QuickSort</p>
+      </div>
+      <button class="btn btn-pivo" onclick="processarProximo()">▶ Renderizar Próximo da Fila</button>
+    </header>
+
+    <div class="doc-box">
+      <strong>Como funciona a arquitetura:</strong> O artista (<strong>Cliente</strong>) envia tarefas com um <strong>Peso</strong> (1 a 100) e <strong>Urgência</strong>. O servidor Python recebe o pacote e aplica o algoritmo <strong>QuickSort</strong> usando a chave <code>(-urgência, peso, id)</code>. Na tabela da direita, o elemento selecionado como <span class="highlight-pivo">PIVÔ DO QUICKSORT</span> fica destacado em amarelo para demonstrar o particionamento da estrutura.
+    </div>
+
+    <div class="split-grid">
+      <div style="display: flex; flex-direction: column; gap: 20px;">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">🎨 Cliente: Enviar Arte para Render</span></div>
+          <div class="field"><label>Artista Responsável</label><input type="text" id="artista" value="Giovanna" /></div>
+          <div class="field"><label>Arquivo / Cena 3D</label><input type="text" id="task-nome" placeholder="Ex: Cena05_Iluminacao_Final.blend" /></div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="field"><label>Peso / Complexidade (1-100)</label><input type="number" id="task-peso" min="1" max="100" value="40" /></div>
+            <div class="field"><label>Prioridade</label>
+              <select id="task-urgencia">
+                <option value="1">1 - Normal</option>
+                <option value="2">2 - Alta (Urgente)</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn" onclick="enviarTarefa()">Transmitir Pacote ao Servidor</button>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">📋 Histórico Geral & Controle do Diretor</span></div>
+          <div class="metrics" id="metrics-box"></div>
+          <div style="overflow-x: auto;" id="tabela-geral"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">⚙️ Servidor: Fila Ordenada (QuickSort)</span>
+          <span style="font-size: 0.8rem; color: var(--pivo);" id="comp-counter">0 comparações</span>
+        </div>
+        <p style="font-size: 0.85rem; color: var(--muted); margin-bottom: 14px;">
+          Ordem real de execução na CPU. Tarefas urgentes ou mais leves sobem automaticamente após o particionamento.
+        </p>
+        <div style="overflow-x: auto;" id="tabela-servidor"></div>
+        <div class="console" id="logs">
+          <p>[SERVIDOR] Midnight Grafite Render Engine aguardando pacotes...</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ABA 2: PORTAL DO CLIENTE -->
+  <section id="aba-cliente" class="aba hidden">
+    <header>
+      <div>
+        <h1>Portal do Cliente — Midnight Grafite</h1>
+        <p class="subtitle">Acompanhamento externo de entregas (oculta filas internas e erros técnicos)</p>
+      </div>
+    </header>
+    <div class="panel">
+      <div class="metrics" id="metrics-cliente"></div>
+      <div id="tabela-cliente"></div>
+    </div>
+  </section>
+
+  <!-- ABA 3: LAB TCP & NÚMEROS PUROS -->
+  <section id="aba-sockets" class="aba hidden">
+    <header>
+      <div>
+        <h1>Laboratório TCP: Transmissão e Ordenação de Inteiros</h1>
+      </div>
+    </header>
+
+    <div class="doc-box">
+      <strong>Fluxo do Protocolo TCP & Algoritmo:</strong><br>
+      1. O <strong>Cliente</strong> captura a sequência de números inteiros.<br>
+      2. Transmite os dados ao <strong>Servidor Python</strong> via conexão <strong>Socket TCP</strong>.<br>
+      3. O Servidor executa o <strong>QuickSort</strong>, registra os pivôs das partições e devolve o vetor ordenado, <strong>fechando a conexão</strong> em seguida.
+    </div>
+
+    <div class="panel">
+      <div class="field">
+        <label>Digite os números inteiros separados por espaço (ou importe os pesos das cenas do estúdio):</label>
+        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+          <input type="text" id="nums-input" value="45 12 78 34 5" style="flex: 1; min-width: 250px;" />
+          <button class="btn btn-amber" style="width: auto; white-space: nowrap;" onclick="puxarPesosDoEstudio()">📥 Puxar Pesos do Estúdio</button>
+          <button class="btn" style="width: auto; white-space: nowrap;" onclick="executarTesteNumeros()">Enviar via Socket TCP</button>
+        </div>
+      </div>
+
+      <div id="resultado-numeros" style="margin-top: 24px;">
+        <p style="color: var(--muted); font-size: 0.9rem;">Clique em <strong>Enviar via Socket TCP</strong> para disparar a comunicação com o back-end Python.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+  const API = 'http://127.0.0.1:8000/api';
+  let tarefas = [];
+  let fila = [];
+  let meta = {};
+
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  async function req(path, opts) {
+    const res = await fetch(API + path, opts);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Erro na requisição');
+    return data;
+  }
+
+  function log(msg) {
+    const box = $('logs');
+    box.insertAdjacentHTML('afterbegin', `<p>[${new Date().toLocaleTimeString()}] ${esc(msg)}</p>`);
+  }
+
+  function trocarAba(nome, btn) {
+    document.querySelectorAll('.aba').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+    $(`aba-${nome}`).classList.remove('hidden');
+    btn.classList.add('active');
+  }
+
+  async function atualizar() {
+    try {
+      const [tRes, fRes] = await Promise.all([req('/tarefas'), req('/fila')]);
+      tarefas = tRes.tarefas;
+      fila = fRes.fila;
+      meta = fRes;
+      $('dot').classList.add('on');
+      $('status-txt').textContent = 'Servidor Python Online';
+      renderizar();
+    } catch (e) {
+      $('dot').classList.remove('on');
+      $('status-txt').textContent = 'Servidor Offline';
+    }
+  }
+
+  async function enviarTarefa() {
+    const nome = $('task-nome').value.trim();
+    const peso = parseInt($('task-peso').value, 10);
+    const urgencia = parseInt($('task-urgencia').value, 10);
+    const artista = $('artista').value.trim() || 'Giovanna';
+    if (!nome) return alert('Informe o nome do arquivo!');
+
+    try {
+      const q = `nome=${encodeURIComponent(nome)}&peso=${peso}&urgencia=${urgencia}&artista=${encodeURIComponent(artista)}`;
+      const d = await req(`/tarefas?${q}`, { method: 'POST' });
+      $('task-nome').value = '';
+      log(`Pacote recebido: #${d.tarefa.id} (${nome}) | Peso: ${peso}. QuickSort executado.`);
+      atualizar();
+    } catch (e) { alert(e.message); }
+  }
+
+  async function priorizar(id) {
+    await req(`/tarefas/${id}/priorizar`, { method: 'PATCH' });
+    log(`Diretoria promoveu #${id} para Alta Prioridade. Fila reordenada.`);
+    atualizar();
+  }
+
+  async function reprocessar(id) {
+    await req(`/tarefas/${id}/reprocessar`, { method: 'POST' });
+    log(`Tarefa #${id} reenviada para a fila de render.`);
+    atualizar();
+  }
+
+  async function processarProximo() {
+    try {
+      const d = await req('/servidor/processar', { method: 'POST' });
+      log(`CPU finalizou #${d.tarefa.id} (${d.tarefa.nome}) -> ${d.tarefa.status.toUpperCase()}`);
+      atualizar();
+    } catch (e) { alert(e.message); }
+  }
+
+  function puxarPesosDoEstudio() {
+    if (!tarefas || tarefas.length === 0) {
+      return alert('Nenhuma tarefa cadastrada no estúdio ainda! Crie algumas cenas na Aba 1 primeiro.');
+    }
+    const pesos = tarefas.map(t => t.peso);
+    $('nums-input').value = pesos.join(' ');
+    log(`[LAB_TCP] Pesos reais importados do estúdio: [ ${pesos.join(', ')} ]`);
+    alert('Pesos do estúdio importados com sucesso para o Lab TCP!');
+  }
+
+  async function executarTesteNumeros() {
+    const texto = $('nums-input').value.trim();
+    const nums = texto.split(/\s+/).map(Number);
+    if (!texto || nums.some(isNaN)) return alert('Digite apenas números inteiros separados por espaço!');
+
+    try {
+      const res = await req('/sockets/ordenar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ numeros: nums })
+      });
+
+      const pivoPrincipal = res.pivos_utilizados[0];
+      $('resultado-numeros').innerHTML = `
+        <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid var(--success); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 0.88rem; color: var(--success);">
+          ✔ <b>Transmissão TCP Concluída:</b> Dados enviados, ordenados via QuickSort e <b>conexão TCP encerrada pelo servidor</b> com sucesso.
+        </div>
+        <div style="margin-bottom: 16px;">
+          <label>1. Vetor Transmitido pelo Cliente (Desordenado):</label>
+          <div class="array-visual">
+            ${res.recebidos.map(n => `<div class="num-box ${n === pivoPrincipal ? 'pivo-box' : ''}">${n}${n === pivoPrincipal ? '<div style="font-size:0.65rem;margin-top:2px;">PIVÔ</div>' : ''}</div>`).join('')}
+          </div>
+        </div>
+        <div style="margin-bottom: 16px;">
+          <label>2. Pivôs Selecionados nas Partições do QuickSort:</label>
+          <p style="color: var(--pivo); font-family: monospace; font-size: 1rem; margin-top: 4px;">[ ${res.pivos_utilizados.join(' → ')} ]</p>
+        </div>
+        <div>
+          <label>3. Resposta Retornada pelo Servidor (Ordenado via QuickSort):</label>
+          <div class="array-visual">
+            ${res.ordenados.map(n => `<div class="num-box sorted-box">${n}</div>`).join('')}
+          </div>
+        </div>
+      `;
+    } catch (e) {
+      alert('Erro ao conectar com o servidor Python: ' + e.message);
+    }
+  }
+
+  function renderizar() {
+    const prontos = tarefas.filter(t => t.status === 'pronto');
+    const erros = tarefas.filter(t => t.status === 'erro');
+    const pivoIdx = fila.length > 0 ? Math.floor(fila.length / 2) : -1;
+
+    $('comp-counter').textContent = `${meta.comparacoes ?? 0} comparações no QuickSort`;
+
+    $('tabela-servidor').innerHTML = `
+      <table>
+        <thead><tr><th>Ordem</th><th>ID</th><th>Arquivo</th><th>Peso</th><th>Urgência</th></tr></thead>
+        <tbody>
+          ${fila.map((t, i) => `
+            <tr class="${i === pivoIdx ? 'row-pivo' : ''}">
+              <td><strong>#${t.posicao}</strong></td>
+              <td>#${t.id}</td>
+              <td>${esc(t.nome)} ${i === pivoIdx ? '<span class="tag-pivo">PIVÔ QUICKSORT</span>' : ''}</td>
+              <td>${t.peso}</td>
+              <td>${t.urgencia === 2 ? '🔥 Alta' : 'Normal'}</td>
+            </tr>
+          `).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);">Fila vazia</td></tr>'}
+        </tbody>
+      </table>
+    `;
+
+    $('metrics-box').innerHTML = `
+      <div class="stat"><div class="stat-lbl">Prontos</div><div class="stat-num" style="color:var(--success)">${prontos.length}</div></div>
+      <div class="stat"><div class="stat-lbl">Na Fila</div><div class="stat-num" style="color:var(--pivo)">${fila.length}</div></div>
+      <div class="stat"><div class="stat-lbl">Erros</div><div class="stat-num" style="color:var(--danger)">${erros.length}</div></div>
+    `;
+
+    const todasOrdenadas = [...fila, ...prontos, ...erros];
+    $('tabela-geral').innerHTML = `
+      <table>
+        <thead><tr><th>ID</th><th>Arquivo</th><th>Status</th><th>Ação Diretor</th></tr></thead>
+        <tbody>
+          ${todasOrdenadas.map(t => `
+            <tr>
+              <td>#${t.id}</td>
+              <td>${esc(t.nome)} <span style="color:var(--muted);font-size:0.8rem;">(Peso ${t.peso})</span></td>
+              <td><span class="badge ${t.status}">${t.status.toUpperCase()}</span></td>
+              <td>
+                ${t.status === 'pendente' && t.urgencia === 1 ? `<button class="mini-btn" onclick="priorizar(${t.id})">⚡ Priorizar</button>` : ''}
+                ${t.status === 'erro' ? `<button class="mini-btn" onclick="reprocessar(${t.id})">↻ Reenviar</button>` : ''}
+                ${(t.status === 'pronto' || (t.status === 'pendente' && t.urgencia === 2)) ? '-' : ''}
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+
+    $('metrics-cliente').innerHTML = `
+      <div class="stat"><div class="stat-lbl">Entregues</div><div class="stat-num" style="color:var(--success)">${prontos.length}</div></div>
+      <div class="stat"><div class="stat-lbl">Em Produção</div><div class="stat-num" style="color:var(--pivo)">${fila.length}</div></div>
+    `;
+    $('tabela-cliente').innerHTML = `
+      <table>
+        <thead><tr><th>ID</th><th>Entrega</th><th>Status</th></tr></thead>
+        <tbody>
+          ${[...prontos, ...fila].map(t => `
+            <tr>
+              <td>#${t.id}</td>
+              <td>${esc(t.nome)}</td>
+              <td><span class="badge ${esc(t.status)}">${t.status === 'pronto' ? 'ENTREGUE' : 'EM PRODUÇÃO'}</span></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
+  atualizar();
+  setInterval(atualizar, 4000);
+</script>
+</body>
+</html>
